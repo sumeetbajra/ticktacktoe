@@ -8,7 +8,9 @@
   "dependencies": {
     "react": "^15.3.2",
     "react-dom": "^15.3.2",
-    "react-sound": "^0.5.2"
+    "react-sound": "^0.5.2",
+    "socket.io-client": "^1.5.1",
+    "socket.io-react": "^1.0.0"
   },
   "scripts": {
     "start": "react-scripts start",

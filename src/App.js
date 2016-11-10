@@ -1,4 +1,6 @@
 import React, { Component } from 'react';
+import io from 'socket.io-client';
+
 import './App.css';
 
 class App extends Component {
@@ -6,10 +8,14 @@ class App extends Component {
   constructor(props) {
     super(props);
     const size = 3;
+    const socket = io.connect('http://192.168.0.112:3001');
 
     this.state = {
+      socket: socket,
       size: size,
+      gameNum: 1,
       marks: ['x', 'o'],
+      multiplayerMark: null,
       winner: null,
       finished: false,
       players: {
@@ -22,9 +28,55 @@ class App extends Component {
         x: 0,
         o: 0,
         tie: 0
-      }
+      },
+      roomId: null,
+      disabled: false,
+      multiplayer: this.getParameterByName('room')
     }
   }
+
+  componentDidMount = () => {
+    var that = this;
+    this.state.socket.on('marked', (data) => {
+      let parsed = data;
+      that.mark(parsed.i, parsed.j, false, true);
+    });
+
+    if(this.getParameterByName('room')) {
+      this.state.socket.emit('joinRoom', this.getParameterByName('room'));
+       that.setState({
+        roomId: this.getParameterByName('room'),
+        multiplayerMark: 'o',
+        disabled: true
+       });
+    }
+
+    this.state.socket.on('roomId', (id) => {
+      that.setState({
+        roomId: id,
+        multiplayerMark: 'x',
+        disabled: false
+      });
+    });
+
+    this.state.socket.on('restartGame', () => {
+      that.restartGame(true);
+    })
+  }
+
+  inviteFriend = () => {
+    this.state.socket.emit('createRoom');
+  }
+
+  getParameterByName(name) {
+    let url = window.location.href;
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+        results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
+}
 
   initializeGrid(size) {
     let arrayGrid = [];
@@ -37,16 +89,39 @@ class App extends Component {
     return arrayGrid;
   }
 
-  mark = (i, j, e) => {
+  mark = (i, j, e, socket) => {
+    let target;
+    if(!socket && this.state.disabled && this.state.multiplayer) {
+      alert('Not your turn');
+      return;
+    }
+
+    this.setState({
+      disabled: true
+    });
+
+    if(socket) {
+      target = document.querySelector('[data-row="' + i + '"][data-col="' + j + '"]');
+      this.setState({
+        disabled: false
+      });
+    }else {
+      target = e.target;
+    }
     var that = this;
-    if(e.target.innerHTML === '&nbsp;') {
-      e.target.innerHTML = this.state.marks[this.state.counter];
-      e.target.style.color = 'white';
+    if(socket || target.innerHTML === '&nbsp;') {
+
+      target.innerHTML = this.state.marks[this.state.counter];
+      target.style.color = 'white';
       let tickTackGrid = this.state.tickTackGrid;
       tickTackGrid[i][j] = this.state.marks[this.state.counter];
       this.setState({
         tickTackGrid: tickTackGrid
       });
+      if(!socket) {
+        this.state.socket.emit('mark', {data: {i: i, j: j}, room: this.state.roomId});
+      }
+      
       if(this.win()) {
         setTimeout(function() {
           let winner = that.state.players[that.win()];
@@ -57,7 +132,7 @@ class App extends Component {
             winner: winner,
             winningTrack: winningTrack,
             finished: true
-          })
+          });
         }, 300)
       }else if(this.tie()) {
         setTimeout(function() {
@@ -84,8 +159,10 @@ class App extends Component {
       cells[i].style.color = '#14bdac';
     }
     this.setState({
-      counter: 0,
-      tickTackGrid: this.initializeGrid(this.state.size)
+      counter: +!((this.state.gameNum + 1) % 2),
+      gameNum: this.state.gameNum + 1,
+      tickTackGrid: this.initializeGrid(this.state.size),
+      disabled: !((this.state.gameNum + 1) % 2 && this.state.multiplayerMark == 'x' || +!((this.state.gameNum + 1) % 2) && this.state.multiplayerMark == 'o')
     });
   }
 
@@ -132,28 +209,63 @@ class App extends Component {
     return !this.win();
   }
 
-  restartGame = () => {
+  restartGame = (socket) => {
+    if(!socket) {
+      this.state.socket.emit('restartGame', this.state.roomId);
+    }
+    console.log(this.state.gameNum);
     this.setState({
       finished: false,
-      winner: null
+      winner: null,
     })
   }
 
   render() {
     let activePlayer = this.state.marks[this.state.counter];
+
+    let resultMsg = '';
+
+    if(!this.state.multiplayer) {
+      if(this.state.winner) {
+        resultMsg = this.state.winner + ' has won';
+      }else {
+        resultMsg = 'The game has tied';
+      }
+    }else {
+      if((this.state.winner == 'Player 1' && this.state.multiplayerMark == 'x') || 
+            (this.state.winner == 'Player 2' && this.state.multiplayerMark == 'o')) {
+        resultMsg = 'You have won';
+      }else if(!this.state.winner) {
+        resultMsg = 'The game has tied';
+      }else {
+        resultMsg = 'You have lost';
+      }
+    }
+
     return (
-      <div className="App">
-    
+      <div className="App">    
+        <button onClick={this.inviteFriend}>Invite</button> {'https://localhost:3000?room=' + this.state.roomId}
         {!this.state.finished ?
           <div className="App-wrapper">
             <Grid size={this.state.size} mark={this.mark}/>
-            <div className={"winning-track" + (activePlayer === 'x' ? ' active' : '')}>Player 1 (X)<br /> {this.state.winningTrack.x}</div>
-            <div className="winning-track">Tie<br /> {this.state.winningTrack.tie}</div>
-            <div className={"winning-track" + (activePlayer === 'o' ? ' active' : '')}>Player 2 (O)<br /> {this.state.winningTrack.o}</div>
+            {!this.state.multiplayer ? 
+              <span>
+                <div className={"winning-track" + (activePlayer === 'x' ? ' active' : '')}>Player 1 (X)<br /> {this.state.winningTrack.x}</div>
+                <div className="winning-track">Tie<br /> {this.state.winningTrack.tie}</div>
+                <div className={"winning-track" + (activePlayer === 'o' ? ' active' : '')}>Player 2 (O)<br /> {this.state.winningTrack.o}</div>
+              </span>
+              :
+              <span>
+                <div className={"winning-track" + (!this.state.disabled ? ' active' : '')}>You ({this.state.multiplayerMark})<br /> {this.state.winningTrack[this.state.multiplayerMark]}</div>
+                <div className="winning-track">Tie<br /> {this.state.winningTrack.tie}</div>
+                <div className={"winning-track" + (this.state.disabled ? ' active' : '')}>Opponent ({this.state.multiplayerMark == 'x' ? 'o' : 'x'})<br /> {this.state.winningTrack[this.state.multiplayerMark == 'x' ? 'o' : 'x']}</div>
+              </span>
+            }
+
           </div> 
           :
-          <div id="finished-game" onClick={this.restartGame}>
-            {this.state.winner ? this.state.winner + ' has won' : 'The game has tied'}<br />
+          <div id="finished-game" onClick={this.restartGame.bind(null, false)}>
+            {resultMsg}<br />
             <span>Click to play again</span>
           </div>
         }
@@ -190,7 +302,7 @@ class Grid extends Component {
 }
 
 const Cell = ({row, col, mark}) => (
-  <div className="cell" onClick={mark}>
+  <div className="cell" data-row={row} data-col={col} onClick={mark}>
    &nbsp;
   </div>
 )
