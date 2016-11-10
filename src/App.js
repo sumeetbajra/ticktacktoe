@@ -3,6 +3,9 @@ import io from 'socket.io-client';
 
 import './App.css';
 
+const PROJECT_URL = 'https://sumeetbajra.github.io/projects/tictactoe';
+//const PROJECT_URL = 'http://localhost:3000';
+
 class App extends Component {
 
   constructor(props) {
@@ -255,11 +258,11 @@ class App extends Component {
     this.setState({
       [field]: false
     });
-    window.location.href = '/';
+    window.location.href = PROJECT_URL;
   }
 
   exitMultiplayer = () => {
-    window.location.href = '/';
+    window.location.href = PROJECT_URL;
   }
 
   render() {
@@ -321,7 +324,7 @@ class App extends Component {
           <div className="finished-game">
             <a href="#" className="close" onClick={this.closeFinished.bind(null, 'waiting')}>x</a>
             Waiting for the opponent to join..<br />
-            <span>Share this url<br/>http://localhost:3000?room={this.state.roomId}</span>
+            <span>Share this url<br/>https://sumeetbajra.github.io/projects/tictactoe?room={this.state.roomId}</span>
           </div>
         }
 
