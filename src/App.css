@@ -26,20 +26,48 @@ body {
   color: white
 }
 
-#finished-game {
+.finished-game {
   font-size: 53px;
   color: white;
   height: 100vh;
   text-align: center;
   padding: 12% 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  background: #14bdac;
 }
 
-#finished-game:hover {
+.finished-game:hover {
   cursor: pointer;
 }
 
-#finished-game span {
+.finished-game span {
   font-size: 20px;
+}
+
+button {
+  background: none;
+    border: solid 2px white;
+    color: white;
+    padding: 14px;
+    position: absolute;
+    font-size: 16px;
+    border-radius: 4px;
+    right: 36px;
+    cursor: pointer;
+}
+
+button:focus{
+  outline: none
+}
+
+.finished-game .close {
+    position: absolute;
+    top: 0;
+    right: 20px;
+    color: white;
+    text-decoration: none;
 }
 
 .cell {

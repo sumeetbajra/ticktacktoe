@@ -7,12 +7,19 @@ class App extends Component {
 
   constructor(props) {
     super(props);
-    const size = 3;
-    const socket = io.connect('http://192.168.0.112:3001');
+    const intialState = this.getStates();
+    this.state = intialState;
+  }
 
-    this.state = {
+  getStates = () => {
+    const size = 3;
+    const socket = io.connect('https://tictactoe-socket.herokuapp.com/');
+    //const socket = io.connect('http://localhost:3001');
+    return {
       socket: socket,
       size: size,
+      waiting: this.getParameterByName('room'),
+      full: false,
       gameNum: 1,
       marks: ['x', 'o'],
       multiplayerMark: null,
@@ -52,20 +59,44 @@ class App extends Component {
     }
 
     this.state.socket.on('roomId', (id) => {
-      that.setState({
-        roomId: id,
-        multiplayerMark: 'x',
-        disabled: false
-      });
+      if(!this.getParameterByName('room')) {
+        window.location.href = window.location.href + '?room=' + id;
+      }
     });
 
     this.state.socket.on('restartGame', () => {
       that.restartGame(true);
+    });
+
+    this.state.socket.on('userCount', (count) => {
+      if(count === 1) {
+        that.setState({
+          multiplayerMark: 'x',
+          disabled: false,
+          waiting: true
+        });
+      }else if(count === 2) {
+        that.setState({
+          full: false,
+          waiting: false
+        })
+      }
+    });
+
+    this.state.socket.on('newUserCount', (count) => {
+      if(count > 2) {
+        that.setState({
+          full: true
+        })
+      }
     })
   }
 
   inviteFriend = () => {
     this.state.socket.emit('createRoom');
+    this.setState({
+      multiplayer: true
+    });
   }
 
   getParameterByName(name) {
@@ -162,7 +193,7 @@ class App extends Component {
       counter: +!((this.state.gameNum + 1) % 2),
       gameNum: this.state.gameNum + 1,
       tickTackGrid: this.initializeGrid(this.state.size),
-      disabled: !((this.state.gameNum + 1) % 2 && this.state.multiplayerMark == 'x' || +!((this.state.gameNum + 1) % 2) && this.state.multiplayerMark == 'o')
+      disabled: !(((this.state.gameNum + 1) % 2 && this.state.multiplayerMark === 'x') || (+!((this.state.gameNum + 1) % 2) && this.state.multiplayerMark === 'o'))
     });
   }
 
@@ -213,11 +244,22 @@ class App extends Component {
     if(!socket) {
       this.state.socket.emit('restartGame', this.state.roomId);
     }
-    console.log(this.state.gameNum);
     this.setState({
       finished: false,
       winner: null,
     })
+  }
+
+  closeFinished = (field, e) => {
+    e.preventDefault();
+    this.setState({
+      [field]: false
+    });
+    window.location.href = '/';
+  }
+
+  exitMultiplayer = () => {
+    window.location.href = '/';
   }
 
   render() {
@@ -232,8 +274,8 @@ class App extends Component {
         resultMsg = 'The game has tied';
       }
     }else {
-      if((this.state.winner == 'Player 1' && this.state.multiplayerMark == 'x') || 
-            (this.state.winner == 'Player 2' && this.state.multiplayerMark == 'o')) {
+      if((this.state.winner === 'Player 1' && this.state.multiplayerMark === 'x') || 
+            (this.state.winner === 'Player 2' && this.state.multiplayerMark === 'o')) {
         resultMsg = 'You have won';
       }else if(!this.state.winner) {
         resultMsg = 'The game has tied';
@@ -243,8 +285,13 @@ class App extends Component {
     }
 
     return (
-      <div className="App">    
-        <button onClick={this.inviteFriend}>Invite</button> {'https://localhost:3000?room=' + this.state.roomId}
+      <div className="App">   
+      {this.state.waiting ? 'waiting' : ''} 
+      {!this.state.multiplayer ? 
+        <button onClick={this.inviteFriend}>Play with a friend</button>
+        :
+        <button onClick={this.exitMultiplayer}>Close</button>
+      }
         {!this.state.finished ?
           <div className="App-wrapper">
             <Grid size={this.state.size} mark={this.mark}/>
@@ -258,15 +305,30 @@ class App extends Component {
               <span>
                 <div className={"winning-track" + (!this.state.disabled ? ' active' : '')}>You ({this.state.multiplayerMark})<br /> {this.state.winningTrack[this.state.multiplayerMark]}</div>
                 <div className="winning-track">Tie<br /> {this.state.winningTrack.tie}</div>
-                <div className={"winning-track" + (this.state.disabled ? ' active' : '')}>Opponent ({this.state.multiplayerMark == 'x' ? 'o' : 'x'})<br /> {this.state.winningTrack[this.state.multiplayerMark == 'x' ? 'o' : 'x']}</div>
+                <div className={"winning-track" + (this.state.disabled ? ' active' : '')}>Opponent ({this.state.multiplayerMark === 'x' ? 'o' : 'x'})<br /> {this.state.winningTrack[this.state.multiplayerMark === 'x' ? 'o' : 'x']}</div>
               </span>
             }
 
           </div> 
           :
-          <div id="finished-game" onClick={this.restartGame.bind(null, false)}>
+          <div className="finished-game" onClick={this.restartGame.bind(null, false)}>
             {resultMsg}<br />
             <span>Click to play again</span>
+          </div>
+        }
+
+        {this.state.waiting && 
+          <div className="finished-game">
+            <a href="#" className="close" onClick={this.closeFinished.bind(null, 'waiting')}>x</a>
+            Waiting for the opponent to join..<br />
+            <span>Share this url<br/>http://localhost:3000?room={this.state.roomId}</span>
+          </div>
+        }
+
+        {this.state.full && 
+          <div className="finished-game">
+            <a href="#" className="close" onClick={this.closeFinished.bind(null, 'full')}>x</a>
+            Sorry, this room is full..
           </div>
         }
       </div>
